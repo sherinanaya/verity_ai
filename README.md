@@ -1,106 +1,115 @@
-# VerityAI — AI-assisted Compliance Intelligence
+# VerityAI — AI-Powered Compliance Intelligence
 
-VerityAI is a local-first prototype that extracts candidate compliance obligations from policy PDFs, suggests risk levels, and provides a human review workflow. It is an assistive tool, not legal advice or a compliance certification system. Every finding must be reviewed by a qualified person.
+VerityAI is a compliance-assessment prototype that analyzes organizational policy PDFs, extracts candidate obligations, suggests risk levels, and gives reviewers a workspace to validate findings and track remediation status.
 
-## Project structure
+> **Important:** VerityAI provides decision support only. Its findings and risk labels are suggestions, not legal advice, a compliance determination, or a certification. Every finding must be checked by a qualified human reviewer against the original policy and applicable requirements.
 
-- `frontend/`: React 18 + Vite single-page application.
-- `backend/`: Java 17+ + Spring Boot 3.4.5 REST API.
-- MySQL: stores assessments, extracted obligations, and review statuses.
-- Apache PDFBox: extracts selectable text from PDFs.
-- OpenAI Chat Completions API: optional structured extraction. If `OPENAI_API_KEY` is blank or the AI request fails, the API uses its rule-based fallback.
+## Features
 
-## Prerequisites (macOS)
+- **PDF policy ingestion:** Upload text-based PDF policies for text extraction and analysis.
+- **LLM-assisted obligation extraction:** Uses the Groq Chat Completions API when `GROQ_API_KEY` is configured.
+- **Rule-based fallback:** If Groq is not configured or the model response cannot be used, the application can fall back to rule-based candidate extraction.
+- **Risk classification:** Candidate findings receive suggested risk levels (Critical, High, Medium, or Low).
+- **Evidence and source references:** Findings include source-page and excerpt information where available, so reviewers can verify them against the document.
+- **Assessment history:** Store and revisit document assessments and their extracted obligations.
+- **Review workflow:** Search and filter obligations, inspect details, and update review status.
+- **Remediation workspace:** Review obligations by their status and follow up on items that need attention.
+- **CSV export:** Export obligation information from the workspace.
 
-- Node.js 20+ and npm.
-- Java 17 or newer. Java 22 is also suitable for this project.
-- Maven 3.9+.
-- MySQL Server 8+ running locally.
+## Technology stack
 
-Check your tools:
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite 6, JavaScript, Lucide React |
+| Backend | Java 17, Spring Boot 3.4.5, Spring Web, Spring Data JPA |
+| Database | MySQL 8+ |
+| PDF processing | Apache PDFBox 3.x |
+| LLM integration | Groq API using the OpenAI-compatible Chat Completions endpoint |
+| Build tools | Maven 3.9+, npm |
+| Frontend hosting | Vercel |
+| Backend hosting | Render (Docker deployment) |
 
-```bash
-node -v
-npm -v
-java -version
-mvn -version
-mysql --version
+## Repository structure
+
+```text
+verity_ai/
+├── backend/
+│   ├── src/main/java/com/verityai/
+│   │   ├── analysis/       # PDF analysis, Groq integration and fallback extraction
+│   │   ├── assessment/     # Assessment creation, history and retrieval
+│   │   ├── common/         # Shared types, errors and health endpoint
+│   │   ├── config/         # CORS configuration
+│   │   ├── document/       # PDF text extraction
+│   │   └── obligation/     # Obligation persistence and review status APIs
+│   ├── src/main/resources/application.properties
+│   ├── src/test/           # Backend tests
+│   ├── Dockerfile
+│   └── pom.xml
+├── frontend/
+│   ├── src/
+│   │   ├── api/            # Backend API client
+│   │   ├── components/     # UI components
+│   │   ├── context/        # Workspace state
+│   │   └── utils/          # Formatting helpers
+│   ├── .env.example
+│   ├── vercel.json
+│   └── package.json
+├── .gitignore
+└── README.md
 ```
 
-If Maven is missing and you use Homebrew:
+## Prerequisites
 
-```bash
-brew install maven
-```
-
-If Homebrew is not installed, install it from https://brew.sh, reopen Terminal, then run the command above. If MySQL Server is not installed, install and start it with:
-
-```bash
-brew install mysql
-brew services start mysql
-```
-
-The `mysql` command-line client alone is not enough; a MySQL server must be running and accepting connections.
+- Java 17
+- Maven 3.9 or later
+- Node.js 20 or later and npm
+- MySQL 8 or later
+- A Groq API key for LLM-assisted extraction (optional; rule-based fallback is available)
 
 ## Run locally
 
-Open **three Terminal tabs/windows**: one for MySQL (if it is not already running), one for the backend, and one for the frontend.
+Run the backend and frontend in separate terminal windows.
 
-### 1. Create the database and a local database user
+### 1. Create the database
 
-Start MySQL first. Then run:
-
-```bash
-mysql -u root -p
-```
-
-Enter your MySQL root password. At the MySQL prompt, run:
+Start your MySQL server, then create the database:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS verityai;
+```
+
+Create a dedicated local database user if needed:
+
+```sql
 CREATE USER IF NOT EXISTS 'verityai'@'localhost' IDENTIFIED BY 'verityai_local';
 GRANT ALL PRIVILEGES ON verityai.* TO 'verityai'@'localhost';
 FLUSH PRIVILEGES;
-EXIT;
 ```
 
-If your local MySQL root account does not use a password, use `mysql -u root` instead of `mysql -u root -p`.
-
-### 2. Start the Spring Boot backend
-
-From the project root:
+### 2. Configure and start the backend
 
 ```bash
 cd backend
+
 export DB_URL='jdbc:mysql://localhost:3306/verityai?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
 export DB_USERNAME='verityai'
 export DB_PASSWORD='verityai_local'
 export FRONTEND_URL='http://localhost:5173'
-```
+export GROQ_API_KEY='YOUR_GROQ_API_KEY'
+export GROQ_MODEL='openai/gpt-oss-20b'
 
-Optional: enable OpenAI extraction. Leave this unset to use the built-in rule-based extractor:
-
-```bash
-export OPENAI_API_KEY='your_openai_api_key'
-export OPENAI_MODEL='gpt-4o-mini'
-```
-
-Start the API:
-
-```bash
 mvn spring-boot:run
 ```
 
-Wait until Spring Boot reports that it has started. Verify in a browser:
+Replace `YOUR_GROQ_API_KEY` with your own Groq API key. Do not commit the key or paste it into source code. If you omit `GROQ_API_KEY`, the application uses its rule-based fallback when available.
 
-- Health endpoint: http://localhost:8080/api/health
-- Obligations endpoint: http://localhost:8080/api/obligations
+The backend starts on `http://localhost:8080`.
 
-The obligations endpoint should initially return `[]` if the database is empty.
+Health endpoint: `http://localhost:8080/api/health`
 
-### 3. Start the React frontend
+### 3. Configure and start the frontend
 
-Open a **new Terminal tab/window**. From the project root:
+Open a second terminal:
 
 ```bash
 cd frontend
@@ -109,58 +118,91 @@ npm install
 npm run dev
 ```
 
-Open the local Vite URL printed by the terminal, normally:
+The local frontend API URL in `frontend/.env.example` is:
 
-http://localhost:5173
+```env
+VITE_API_URL=http://localhost:8080/api
+```
 
-Keep both backend and frontend terminal processes running while using the application.
+Open `http://localhost:5173` in your browser.
 
-## Main workflow
+## Environment variables
 
-1. Open the VerityAI frontend.
-2. Upload a text-based PDF (maximum 10 MB).
-3. Select **Analyze document**.
-4. Review the candidate obligations, risk suggestions, source pages, and evidence excerpts.
-5. Change each finding's review status to `NEEDS_REVIEW`, `CONFIRMED`, `NOT_APPLICABLE`, or `REMEDIATED`.
-6. Use the Remediation view to review suggested corrective actions.
+### Backend
 
-Scanned/image-only PDFs are not supported because OCR has not been added. The rule-based fallback is a demo extractor, not a substitute for an AI model or a compliance expert.
+| Variable | Purpose | Example / default |
+|---|---|---|
+| `PORT` | HTTP port | `8080` |
+| `DB_URL` | MySQL JDBC connection URL | `jdbc:mysql://localhost:3306/verityai?...` |
+| `DB_USERNAME` | MySQL username | `verityai` |
+| `DB_PASSWORD` | MySQL password | Set locally; do not commit |
+| `GROQ_API_KEY` | Groq API key for LLM extraction | Secret; configure in environment |
+| `GROQ_MODEL` | Groq model identifier | `openai/gpt-oss-20b` |
+| `FRONTEND_URL` | Allowed frontend origin for CORS | `http://localhost:5173` |
 
-## API endpoints
+### Frontend
 
-- `GET /api/health` — API health check.
-- `POST /api/analyze` — multipart form upload; field name is `file`.
-- `GET /api/obligations` — list findings; optional query parameters: `assessmentId`, `risk`, `status`, `q`.
-- `GET /api/obligations/{id}` — get one finding.
-- `PUT /api/obligations/{id}/status` — update review status. JSON body: `{ "status": "CONFIRMED" }`.
-- `DELETE /api/obligations/{id}` — delete one finding.
-- `GET /api/assessments` — list uploaded assessments.
-- `GET /api/assessments/{id}` — assessment and its obligations.
-- `GET /api/assessments/{id}/obligations` — obligations for one assessment.
+| Variable | Purpose | Local value |
+|---|---|---|
+| `VITE_API_URL` | Backend API base URL | `http://localhost:8080/api` |
 
-## Configuration
+Only public configuration should use the `VITE_` prefix. **Never put the Groq API key in a frontend environment variable**; browser-exposed variables are not secret.
 
-Backend environment variables:
+## API overview
 
-- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
-- `OPENAI_API_KEY` (optional), `OPENAI_MODEL` (optional; default `gpt-4o-mini`)
-- `FRONTEND_URL` (default `http://localhost:5173`)
-- `PORT` (default `8080`)
+The backend exposes the following endpoints:
 
-Frontend environment variable:
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Health check |
+| `POST` | `/api/analyze` | Upload and analyze a PDF (`multipart/form-data`, field name `file`) |
+| `GET` | `/api/assessments` | List assessments |
+| `GET` | `/api/assessments/{id}` | Retrieve assessment details |
+| `GET` | `/api/assessments/{id}/obligations` | List obligations for an assessment |
+| `GET` | `/api/obligations` | List obligations; supports optional filters such as `assessmentId`, `risk`, `status`, and `q` |
+| `GET` | `/api/obligations/{id}` | Retrieve one obligation |
+| `PUT` | `/api/obligations/{id}/status` | Update an obligation's review status |
+| `DELETE` | `/api/obligations/{id}` | Delete an obligation |
 
-- `VITE_API_URL` (default `http://localhost:8080/api`)
+## Deployment
 
-Do not commit `.env` files, API keys, or database passwords.
+The frontend and backend are deployed separately. The frontend calls the backend using `VITE_API_URL`.
 
-## Deployment notes
+### Backend — Render
 
-Keep `frontend/` and `backend/` as separate deploy roots. The frontend can be deployed to Vercel (root `frontend`, build `npm run build`, output `dist`). The backend Dockerfile is in `backend/`; deploy it as a Docker web service and provide the environment variables above. Use a managed external MySQL-compatible database; do not configure a hosted service to connect to `localhost`.
+1. Push the repository to GitHub.
+2. In Render, create a new **Web Service** and connect the GitHub repository.
+3. Set the **Root Directory** to `backend`.
+4. Select **Docker** as the runtime and use `Dockerfile` in the backend root.
+5. Configure the backend environment variables: `PORT` (if required by the platform), `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `GROQ_API_KEY`, `GROQ_MODEL`, and `FRONTEND_URL`.
+6. Use a hosted MySQL-compatible database reachable by the Render service. Put its connection details in `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`; do not use `localhost` for a separately hosted database.
+7. Deploy and verify the service at `/api/health`.
 
-## Known prototype limitations
+### Frontend — Vercel
 
-- No authentication, tenant isolation, or role-based access control.
-- No OCR for scanned PDFs.
-- Remediation is currently a recommendation/status view, not a separate task-management entity with owners and due dates.
-- No audit trail, rate limiting, or production-grade file retention controls.
-- `spring.jpa.hibernate.ddl-auto=update` is convenient for local prototyping; use versioned database migrations before production.
+1. Import the GitHub repository into Vercel.
+2. Set the **Root Directory** to `frontend`.
+3. Select **Vite** as the framework preset.
+4. Set the build command to `npm run build` and output directory to `dist` (Vercel usually detects these automatically).
+5. Add the environment variable `VITE_API_URL` with the deployed backend URL, for example `https://YOUR-BACKEND.onrender.com/api`.
+6. Deploy the frontend.
+7. Set the backend's `FRONTEND_URL` to the deployed Vercel origin (for example, `https://YOUR-PROJECT.vercel.app`) and redeploy the backend if you changed it.
+
+## Security notes
+
+- Never commit `.env` files, API keys, database passwords, or access tokens.
+- Keep `GROQ_API_KEY` on the backend only. Do not use a `VITE_GROQ_API_KEY` variable.
+- Use `.env.example` files only for non-secret placeholders and documentation.
+- Use a dedicated database account with only the permissions the application needs.
+- Configure production CORS to allow only the deployed frontend origin.
+
+## Current limitations
+
+- PDF text extraction is designed for text-based PDFs. Scanned/image-only PDFs require OCR, which is not described as part of the current implementation.
+- AI-generated findings can be incomplete or incorrect; verify each finding and source excerpt manually.
+- The rule-based extractor is a fallback and is not an LLM.
+- The prototype should be hardened before production use with authentication, authorization, tenant isolation, audit logging, rate limiting, file-retention controls, operational monitoring, and security review.
+
+## License
+
+No license has been specified yet. Add a `LICENSE` file before treating this repository as open source.
