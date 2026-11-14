@@ -1,115 +1,174 @@
 # VerityAI — AI-Powered Compliance Intelligence
 
-VerityAI is a compliance-assessment prototype that analyzes organizational policy PDFs, extracts candidate obligations, suggests risk levels, and gives reviewers a workspace to validate findings and track remediation status.
+<p align="center">
+  <strong>Turn policy documents into reviewable compliance insights.</strong>
+</p>
 
-> **Important:** VerityAI provides decision support only. Its findings and risk labels are suggestions, not legal advice, a compliance determination, or a certification. Every finding must be checked by a qualified human reviewer against the original policy and applicable requirements.
+VerityAI is a web-based compliance intelligence prototype that analyzes organizational policy PDFs, extracts candidate obligations, assigns suggested risk levels, and provides a workspace for human review and remediation tracking.
+
+**Live application:** https://verity-ai-sooty.vercel.app/  
+**Backend health check:** https://verityai-production-883e23ad.up.railway.app/api/health
+
+> **Important:** VerityAI is a decision-support prototype. Extracted obligations, risk levels, rationales, and recommendations are AI-assisted suggestions—not legal advice, a compliance determination, or a certification. A qualified human reviewer must validate every finding against the original policy and the organization's context.
 
 ## Features
 
-- **PDF policy ingestion:** Upload text-based PDF policies for text extraction and analysis.
-- **LLM-assisted obligation extraction:** Uses the Groq Chat Completions API when `GROQ_API_KEY` is configured.
-- **Rule-based fallback:** If Groq is not configured or the model response cannot be used, the application can fall back to rule-based candidate extraction.
-- **Risk classification:** Candidate findings receive suggested risk levels (Critical, High, Medium, or Low).
-- **Evidence and source references:** Findings include source-page and excerpt information where available, so reviewers can verify them against the document.
-- **Assessment history:** Store and revisit document assessments and their extracted obligations.
-- **Review workflow:** Search and filter obligations, inspect details, and update review status.
-- **Remediation workspace:** Review obligations by their status and follow up on items that need attention.
-- **CSV export:** Export obligation information from the workspace.
+- **PDF policy upload:** Upload text-based PDF policy documents (up to 10 MB).
+- **Text extraction:** Extract selectable text and page information from uploaded PDFs using Apache PDFBox.
+- **AI-assisted obligation extraction:** Optionally use the OpenAI API to identify candidate compliance obligations in a structured format.
+- **Rule-based fallback:** Continue to analyze documents when an OpenAI API key is not configured or AI extraction cannot be used.
+- **Risk assessment:** Assign suggested Critical, High, Medium, or Low risk levels to extracted obligations.
+- **Evidence context:** Display available source-page references, excerpts, and rationale to help reviewers trace findings to the source document.
+- **Assessment persistence:** Save assessments and extracted obligations in MySQL so the workspace can retrieve previously analyzed findings.
+- **Obligation review workflow:** Search and filter extracted obligations, inspect findings, and update review statuses.
+- **Remediation workspace:** View outstanding findings and mark items as remediated.
+- **CSV export:** Export the currently visible obligation list for offline review.
+- **Dashboard overview:** View obligation totals, high/critical risk counts, review status, and risk distribution.
+- **Responsive interface:** React-based workspace with Overview, Obligations, and Remediation sections.
 
-## Technology stack
+## Technology Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, Vite 6, JavaScript, Lucide React |
-| Backend | Java 17, Spring Boot 3.4.5, Spring Web, Spring Data JPA |
+| Frontend | React 18, JavaScript, Vite 6, Lucide React |
+| Backend | Java 17, Spring Boot 3.4.5, Spring Web, Spring Data JPA, Bean Validation |
 | Database | MySQL 8+ |
-| PDF processing | Apache PDFBox 3.x |
-| LLM integration | Groq API using the OpenAI-compatible Chat Completions endpoint |
-| Build tools | Maven 3.9+, npm |
+| PDF processing | Apache PDFBox 3.0.4 |
+| AI integration | OpenAI API (optional), with rule-based fallback |
 | Frontend hosting | Vercel |
-| Backend hosting | Render (Docker deployment) |
+| Backend hosting | Railway (Docker deployment) |
+| Database hosting | Railway MySQL service with persistent volume |
+| Build tools | Maven 3.9+, Node.js 20+, npm |
 
-## Repository structure
+## Application Architecture
+
+```text
+                   ┌─────────────────────────────┐
+                   │       User / Browser        │
+                   └──────────────┬──────────────┘
+                                  │
+                                  ▼
+                   ┌─────────────────────────────┐
+                   │   React + Vite Frontend     │
+                   │          Vercel             │
+                   └──────────────┬──────────────┘
+                                  │ HTTPS / REST API
+                                  ▼
+                   ┌─────────────────────────────┐
+                   │   Spring Boot REST API     │
+                   │          Railway           │
+                   └───────┬─────────────┬───────┘
+                           │             │
+                 PDF text  │             │ AI-assisted extraction
+                 extraction│             ▼
+                           │      ┌──────────────────┐
+                           │      │    OpenAI API    │
+                           │      │   (optional)     │
+                           │      └──────────────────┘
+                           ▼
+                   ┌─────────────────────────────┐
+                   │   Analysis & Risk Logic     │
+                   │  Rule-based fallback       │
+                   └──────────────┬──────────────┘
+                                  │
+                                  ▼
+                   ┌─────────────────────────────┐
+                   │       Railway MySQL        │
+                   │ Assessments & Obligations  │
+                   └─────────────────────────────┘
+```
+
+## Repository Structure
 
 ```text
 verity_ai/
 ├── backend/
 │   ├── src/main/java/com/verityai/
-│   │   ├── analysis/       # PDF analysis, Groq integration and fallback extraction
+│   │   ├── analysis/       # PDF analysis, AI extraction and fallback logic
 │   │   ├── assessment/     # Assessment creation, history and retrieval
 │   │   ├── common/         # Shared types, errors and health endpoint
-│   │   ├── config/         # CORS configuration
-│   │   ├── document/       # PDF text extraction
-│   │   └── obligation/     # Obligation persistence and review status APIs
-│   ├── src/main/resources/application.properties
-│   ├── src/test/           # Backend tests
+│   │   ├── config/         # CORS and application configuration
+│   │   ├── document/       # PDF text extraction using PDFBox
+│   │   └── obligation/     # Obligation persistence and review APIs
+│   ├── src/test/           # Backend unit and controller tests
 │   ├── Dockerfile
+│   ├── .env.example
 │   └── pom.xml
 ├── frontend/
 │   ├── src/
 │   │   ├── api/            # Backend API client
-│   │   ├── components/     # UI components
+│   │   ├── components/     # Upload, UI and obligation components
 │   │   ├── context/        # Workspace state
-│   │   └── utils/          # Formatting helpers
+│   │   ├── utils/          # Formatting helpers
+│   │   ├── App.jsx         # Main dashboard and workspace views
+│   │   └── styles.css      # Application styling
 │   ├── .env.example
 │   ├── vercel.json
-│   └── package.json
+│   ├── package.json
+│   └── vite.config.js
 ├── .gitignore
 └── README.md
 ```
 
-## Prerequisites
+## Run Locally
+
+### Prerequisites
 
 - Java 17
 - Maven 3.9 or later
 - Node.js 20 or later and npm
 - MySQL 8 or later
-- A Groq API key for LLM-assisted extraction (optional; rule-based fallback is available)
+- OpenAI API key (optional)
 
-## Run locally
+### 1. Clone the repository
 
-Run the backend and frontend in separate terminal windows.
+```bash
+git clone https://github.com/sherinanaya/verity_ai.git
+cd verity_ai
+```
 
-### 1. Create the database
+### 2. Create a MySQL database
 
-Start your MySQL server, then create the database:
+Start your local MySQL server and run:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS verityai;
-```
-
-Create a dedicated local database user if needed:
-
-```sql
 CREATE USER IF NOT EXISTS 'verityai'@'localhost' IDENTIFIED BY 'verityai_local';
 GRANT ALL PRIVILEGES ON verityai.* TO 'verityai'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-### 2. Configure and start the backend
+Use your own local database username and password if they differ from these examples.
+
+### 3. Configure and start the backend
+
+Open a terminal:
 
 ```bash
 cd backend
 
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
 export DB_URL='jdbc:mysql://localhost:3306/verityai?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
 export DB_USERNAME='verityai'
 export DB_PASSWORD='verityai_local'
 export FRONTEND_URL='http://localhost:5173'
-export GROQ_API_KEY='YOUR_GROQ_API_KEY'
-export GROQ_MODEL='openai/gpt-oss-20b'
+
+# Optional: enable OpenAI-powered extraction
+export OPENAI_API_KEY='YOUR_OPENAI_API_KEY'
+export OPENAI_MODEL='gpt-4o-mini'
 
 mvn spring-boot:run
 ```
 
-Replace `YOUR_GROQ_API_KEY` with your own Groq API key. Do not commit the key or paste it into source code. If you omit `GROQ_API_KEY`, the application uses its rule-based fallback when available.
+If `OPENAI_API_KEY` is omitted, the backend can use its rule-based extraction fallback. Do not commit API keys or passwords.
 
-The backend starts on `http://localhost:8080`.
+The backend runs at `http://localhost:8080`.
 
 Health endpoint: `http://localhost:8080/api/health`
 
-### 3. Configure and start the frontend
+### 4. Configure and start the frontend
 
-Open a second terminal:
+Open a second terminal from the repository root:
 
 ```bash
 cd frontend
@@ -118,7 +177,7 @@ npm install
 npm run dev
 ```
 
-The local frontend API URL in `frontend/.env.example` is:
+Set the local API URL in `frontend/.env`:
 
 ```env
 VITE_API_URL=http://localhost:8080/api
@@ -126,83 +185,116 @@ VITE_API_URL=http://localhost:8080/api
 
 Open `http://localhost:5173` in your browser.
 
-## Environment variables
+## Environment Variables
 
 ### Backend
 
-| Variable | Purpose | Example / default |
+| Variable | Purpose | Local example |
 |---|---|---|
-| `PORT` | HTTP port | `8080` |
+| `PORT` | Port used by the web server | `8080` |
 | `DB_URL` | MySQL JDBC connection URL | `jdbc:mysql://localhost:3306/verityai?...` |
 | `DB_USERNAME` | MySQL username | `verityai` |
-| `DB_PASSWORD` | MySQL password | Set locally; do not commit |
-| `GROQ_API_KEY` | Groq API key for LLM extraction | Secret; configure in environment |
-| `GROQ_MODEL` | Groq model identifier | `openai/gpt-oss-20b` |
+| `DB_PASSWORD` | MySQL password | `verityai_local` |
+| `OPENAI_API_KEY` | Optional key for AI-assisted extraction | Configure as a secret |
+| `OPENAI_MODEL` | OpenAI model identifier | `gpt-4o-mini` |
 | `FRONTEND_URL` | Allowed frontend origin for CORS | `http://localhost:5173` |
 
 ### Frontend
 
-| Variable | Purpose | Local value |
+| Variable | Purpose | Production value |
 |---|---|---|
-| `VITE_API_URL` | Backend API base URL | `http://localhost:8080/api` |
+| `VITE_API_URL` | Backend API base URL | `https://verityai-production-883e23ad.up.railway.app/api` |
 
-Only public configuration should use the `VITE_` prefix. **Never put the Groq API key in a frontend environment variable**; browser-exposed variables are not secret.
+Only public configuration belongs in frontend variables. Never expose `OPENAI_API_KEY`, database credentials, or other secrets through a `VITE_` variable.
 
-## API overview
+## API Overview
 
-The backend exposes the following endpoints:
+All endpoints are served from the backend base URL.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Health check |
-| `POST` | `/api/analyze` | Upload and analyze a PDF (`multipart/form-data`, field name `file`) |
-| `GET` | `/api/assessments` | List assessments |
+| `GET` | `/api/health` | Check backend health |
+| `POST` | `/api/analyze` | Analyze a PDF (`multipart/form-data`, field name `file`) |
+| `GET` | `/api/assessments` | List saved assessments |
 | `GET` | `/api/assessments/{id}` | Retrieve assessment details |
-| `GET` | `/api/assessments/{id}/obligations` | List obligations for an assessment |
-| `GET` | `/api/obligations` | List obligations; supports optional filters such as `assessmentId`, `risk`, `status`, and `q` |
+| `GET` | `/api/assessments/{id}/obligations` | List obligations for one assessment |
+| `GET` | `/api/obligations` | List obligations; supports `assessmentId`, `risk`, `status`, and `q` filters |
 | `GET` | `/api/obligations/{id}` | Retrieve one obligation |
-| `PUT` | `/api/obligations/{id}/status` | Update an obligation's review status |
-| `DELETE` | `/api/obligations/{id}` | Delete an obligation |
+| `PUT` | `/api/obligations/{id}/status` | Update review status |
+| `DELETE` | `/api/obligations/{id}` | Delete one obligation |
+
+Example status update body:
+
+```json
+{
+  "status": "CONFIRMED"
+}
+```
+
+Supported review statuses include `NEEDS_REVIEW`, `CONFIRMED`, `NOT_APPLICABLE`, and `REMEDIATED`.
 
 ## Deployment
 
-The frontend and backend are deployed separately. The frontend calls the backend using `VITE_API_URL`.
+The frontend and backend are deployed independently and communicate through the backend API URL.
 
-### Backend — Render
+### Backend and database — Railway
 
-1. Push the repository to GitHub.
-2. In Render, create a new **Web Service** and connect the GitHub repository.
-3. Set the **Root Directory** to `backend`.
-4. Select **Docker** as the runtime and use `Dockerfile` in the backend root.
-5. Configure the backend environment variables: `PORT` (if required by the platform), `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `GROQ_API_KEY`, `GROQ_MODEL`, and `FRONTEND_URL`.
-6. Use a hosted MySQL-compatible database reachable by the Render service. Put its connection details in `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`; do not use `localhost` for a separately hosted database.
-7. Deploy and verify the service at `/api/health`.
+- **Backend service:** `verity_ai`
+- **Database service:** Railway MySQL
+- **Backend public URL:** `https://verityai-production-883e23ad.up.railway.app`
+- **Health endpoint:** `https://verityai-production-883e23ad.up.railway.app/api/health`
+- **Backend root directory:** `backend`
+- **Build:** Dockerfile in the `backend` directory
+- **Application port:** `8080` (the application also reads Railway's `PORT` variable)
+
+Configure the backend service with these environment variables:
+
+```env
+DB_URL=jdbc:mysql://${{MySQL.MYSQLHOST}}:${{MySQL.MYSQLPORT}}/${{MySQL.MYSQLDATABASE}}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+DB_USERNAME=${{MySQL.MYSQLUSER}}
+DB_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+FRONTEND_URL=https://verity-ai-sooty.vercel.app
+OPENAI_API_KEY=<set only if using OpenAI extraction>
+OPENAI_MODEL=gpt-4o-mini
+```
+
+The `${{MySQL...}}` expressions are Railway service-reference variables. If your Railway MySQL service has a different service name, select its corresponding reference variables in Railway rather than copying the example name literally. Keep credentials in Railway's variable settings; never add them to Git.
 
 ### Frontend — Vercel
 
-1. Import the GitHub repository into Vercel.
-2. Set the **Root Directory** to `frontend`.
-3. Select **Vite** as the framework preset.
-4. Set the build command to `npm run build` and output directory to `dist` (Vercel usually detects these automatically).
-5. Add the environment variable `VITE_API_URL` with the deployed backend URL, for example `https://YOUR-BACKEND.onrender.com/api`.
-6. Deploy the frontend.
-7. Set the backend's `FRONTEND_URL` to the deployed Vercel origin (for example, `https://YOUR-PROJECT.vercel.app`) and redeploy the backend if you changed it.
+- **Project:** `verity-ai`
+- **Production URL:** https://verity-ai-sooty.vercel.app/
+- **GitHub repository:** `sherinanaya/verity_ai`
+- **Production branch:** `main`
+- **Root directory:** `frontend`
+- **Framework preset:** Vite
+- **Install command:** `npm install`
+- **Build command:** `npm run build`
+- **Output directory:** `dist`
 
-## Security notes
+Configure this Vercel environment variable for Production (and Preview if required):
 
-- Never commit `.env` files, API keys, database passwords, or access tokens.
-- Keep `GROQ_API_KEY` on the backend only. Do not use a `VITE_GROQ_API_KEY` variable.
-- Use `.env.example` files only for non-secret placeholders and documentation.
-- Use a dedicated database account with only the permissions the application needs.
-- Configure production CORS to allow only the deployed frontend origin.
+```env
+VITE_API_URL=https://verityai-production-883e23ad.up.railway.app/api
+```
 
-## Current limitations
+After changing environment variables, redeploy the corresponding service so the new values take effect.
 
-- PDF text extraction is designed for text-based PDFs. Scanned/image-only PDFs require OCR, which is not described as part of the current implementation.
-- AI-generated findings can be incomplete or incorrect; verify each finding and source excerpt manually.
-- The rule-based extractor is a fallback and is not an LLM.
-- The prototype should be hardened before production use with authentication, authorization, tenant isolation, audit logging, rate limiting, file-retention controls, operational monitoring, and security review.
+## Validation Performed
+
+- Backend health endpoint returned a successful JSON response: `{"service":"VerityAI API","status":"ok"}`.
+- Railway showed the backend deployment as Active after the database connection configuration was corrected.
+- Vercel reported the frontend deployment as **Deployed to Production**.
+- The deployed dashboard and its main workspace flows were manually tested in the live application by the project owner.
+
+## Limitations and Responsible Use
+
+- The current PDF pipeline extracts selectable text; scanned/image-only PDFs may require OCR and are not guaranteed to work.
+- Extraction can miss obligations or produce incorrect interpretations. Always compare findings with the original document.
+- Risk levels and recommendations are suggestions, not legal or regulatory determinations.
+- The rule-based fallback is not a substitute for an LLM or a qualified compliance professional.
+- Before handling sensitive organizational documents at scale, add authentication, authorization, tenant isolation, audit logging, rate limiting, retention/deletion policies, stronger operational monitoring, and a security review.
 
 ## License
 
-No license has been specified yet. Add a `LICENSE` file before treating this repository as open source.
+No license has been specified. Add a `LICENSE` file before distributing the project as open-source software.
